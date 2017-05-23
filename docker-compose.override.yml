@@ -1,0 +1,24 @@
+version: '3.1'
+
+services:
+  cron:
+    build: .
+    environment:
+      - CLOUDSHELL_DOMAIN=Global
+      - CLOUDSHELL_SERVER=localhost
+    secrets:
+      - cloudshell_password
+      - cloudshell_user
+    volumes:
+      - cron_configs:/usr/src/script/config
+      - data:/usr/src/script/data
+
+secrets:
+  cloudshell_password:
+    file: dev-secrets/cloudshell_password.txt
+  cloudshell_user:
+    file: dev-secrets/cloudshell_user.txt
+
+volumes:
+  cron_configs:
+  data:

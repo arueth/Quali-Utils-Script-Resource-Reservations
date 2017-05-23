@@ -1,0 +1,2 @@
+cloudshell-automation-api>=7.1,<7.2
+pyyaml==3.12

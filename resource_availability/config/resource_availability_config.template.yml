@@ -1,0 +1,10 @@
+version: 1
+cloudshell_server: <%= environ['CLOUDSHELL_SERVER'] %>
+cloudshell_user: <%= file['/run/secrets/cloudshell_user'] %>
+cloudshell_password: <%= file['/run/secrets/cloudshell_password'] %>
+cloudshell_domain: <%= environ['CLOUDSHELL_DOMAIN'] %>
+start_offset: 0
+end_offset: 2592000
+output_file: "/usr/src/script/data/resource-gantt-reservations.json"
+family_model_list:
+  - "Generic Resource:Generic Resource"
