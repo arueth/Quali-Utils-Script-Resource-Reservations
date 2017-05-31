@@ -14,6 +14,7 @@ class ResourceAvailability(object):
     def __init__(self):
         self.reservation_report = []
         self.resource_list = []
+        self.resource_by_name = []
         self.start_time = ''
         self.end_time = ''
 
@@ -44,71 +45,64 @@ class ResourceAvailability(object):
         """
         return time.strftime('%Y-%m-%d %H:%M:%S')
 
-    def _resource_exists(self, device_name):
-        """
-        Boolean query to see if a device exists in inventory
-        :param string device_name: the name of the device to query 
-        :return: boolean 
-        """
-        try:
-            self.cs_session.GetResourceDetails(resourceFullPath=device_name)
-        except CloudShellAPIError:
-            return False
-
-        return True
-
     def _convert_to_ISO8601(self, dts_in=''):
         """
         Converts the std CloudShell API time returned into the ISO8601 Date format.
         Preserves the return's Hour/Min in the 24hr clock
         :param string dts_in: Time string formatted from the CloudShell API return
-        :return: string formatted time:  
+        :return: string formatted time:
         """
         date, time = dts_in.split(' ', 1)
         month, day, year = date.split('/')
 
         return '%s-%s-%s %s' % (year, month, day, time)
 
-    def get_reservations(self, device_name, start_time='', end_time=''):
+    def get_reservations(self, resource_list, start_time='', end_time=''):
         """
-        This pulls all reservations for a given device in the listed time range, 
+        This pulls all reservations for a given device in the listed time range,
         and add them to the Reservation Report
-        :param string device_name: Full Name of Resource in Question
+        :param list resource_list: List of resource names
         :param string start_time: Start of search period "DD/MM/YYYY HH:MM" in GMT
         :param string end_time: End of search period "DD/MM/YYYY HH:MM" in GMT
-        :rtype: FindResourceListInfo
+        :return:
         """
-        item_list = self.cs_session.GetResourceAvailabilityInTimeRange(resourcesNames=[device_name],
-                                                                       startTime=start_time,
-                                                                       endTime=end_time,
-                                                                       showAllDomains=True).Resources
+        resource_info_list = self.cs_session.GetResourceAvailabilityInTimeRange(resourcesNames=resource_list,
+                                                                                startTime=start_time,
+                                                                                endTime=end_time,
+                                                                                showAllDomains=True).Resources
 
-        # Thi is how do format for AmCharts - requires reservation_report to be a list
-        for item in item_list:
-            if item.FullName == device_name:
-                temp_d = dict()
-                temp_d['category'] = device_name
-                temp_d['segments'] = []
-                for each in item.Reservations:
-                    inner = dict()
-                    inner['start'] = self._convert_to_ISO8601(each.StartTime)
-                    inner['end'] = self._convert_to_ISO8601(each.EndTime)
-                    inner['task'] = '%s owned by: %s (%s)' % (each.ReservationName, each.Owner, each.ReservationId)
-                    temp_d['segments'].append(inner)
+        for resource in resource_info_list:
+            if resource.FullName in resource_list:
+                entry = dict()
+                entry['category'] = resource.Name
+                entry['segments'] = []
+                for reservation in resource.Reservations:
+                    segment = dict()
+                    segment['end'] = self._convert_to_ISO8601(reservation.EndTime)
+                    segment['id'] = reservation.ReservationId
+                    segment['name'] = reservation.ReservationName
+                    segment['owner'] = reservation.Owner
+                    segment['start'] = self._convert_to_ISO8601(reservation.StartTime)
 
-                temp_d['segments'] = sorted(temp_d['segments'], key=lambda k: k['end'], reverse=True)
-                self.reservation_report.append(temp_d)
+                    entry['segments'].append(segment)
+
+                entry['segments'] = sorted(entry['segments'], key=lambda k: k['end'], reverse=True)
+                self.reservation_report.append(entry)
 
     def generate_resource_list(self):
         """
         Generates a complete list of resources based on the Family/Model lookup
         The search terms are entries in the 'fam_model_list' in the Configs
         Each entry should be: '<FamilyName>:<ModelName>' - either can be omitted, but not both
-        :return: 
+        :return:
         """
+
+        self.resource_list = []
         for entry in self.param['family_model_list']:
             family, model = entry.split(':', 1)
-            self.resource_list += self.cs_session.FindResources(resourceFamily=family, resourceModel=model).Resources
+            resources = self.cs_session.FindResources(resourceFamily=family, resourceModel=model).Resources
+
+            self.resource_list += [resource.Name for resource in resources]
 
     def generate_start_end_time(self):
         """
@@ -137,15 +131,7 @@ class ResourceAvailability(object):
         self.generate_start_end_time()
         self.generate_resource_list()
 
-        for resource in self.resource_list:
-            if self._resource_exists(resource.Name):
-                self.get_reservations(device_name=resource.Name, start_time=self.start_time, end_time=self.end_time)
-
-        amchart_json = dumps(self.reservation_report,
-                             sort_keys=False,
-                             indent=4,
-                             separators=(',', ': '))
+        self.get_reservations(resource_list=self.resource_list, start_time=self.start_time, end_time=self.end_time)
 
         with open(self.param['output_file'], 'w') as f:
-            f.write(amchart_json)
-            f.close()
+            f.write(dumps(self.reservation_report, sort_keys=False, indent=4, separators=(',', ': ')))

@@ -5,13 +5,18 @@ services:
     build: .
     environment:
       - CLOUDSHELL_DOMAIN=Global
-      - CLOUDSHELL_SERVER=localhost
+      - CLOUDSHELL_SERVER=192.168.0.110
+    networks:
+      - backend
     secrets:
       - cloudshell_password
       - cloudshell_user
     volumes:
       - cron_configs:/usr/src/script/config
       - data:/usr/src/script/data
+
+networks:
+  backend:
 
 secrets:
   cloudshell_password:
