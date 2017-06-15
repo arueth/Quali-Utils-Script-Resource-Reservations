@@ -55,7 +55,7 @@ class ResourceAvailability(object):
         date, time = dts_in.split(' ', 1)
         month, day, year = date.split('/')
 
-        return '%s-%s-%s %s' % (year, month, day, time)
+        return '%s-%s-%s %sZ' % (year, month, day, time)
 
     def get_reservations(self, resource_list, start_time='', end_time=''):
         """
