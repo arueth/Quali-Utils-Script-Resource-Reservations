@@ -57,39 +57,40 @@ class ResourceAvailability(object):
 
         return '%s-%s-%s %sZ' % (year, month, day, time)
 
-    def get_reservations(self, resource_list, start_time='', end_time=''):
+    def get_reservations(self, resources, start_time='', end_time=''):
         """
         This pulls all reservations for a given device in the listed time range,
         and add them to the Reservation Report
-        :param list resource_list: List of resource names
+        :param dict resources: Dictionary of resources with resource name as the key
         :param string start_time: Start of search period "DD/MM/YYYY HH:MM" in GMT
         :param string end_time: End of search period "DD/MM/YYYY HH:MM" in GMT
         :return:
         """
-        resource_info_list = self.cs_session.GetResourceAvailabilityInTimeRange(resourcesNames=resource_list,
+        resource_info_list = self.cs_session.GetResourceAvailabilityInTimeRange(resourcesNames=resources.keys(),
                                                                                 startTime=start_time,
                                                                                 endTime=end_time,
                                                                                 showAllDomains=True).Resources
 
         for resource in resource_info_list:
-            if resource.FullName in resource_list:
-                entry = dict()
-                entry['category'] = resource.Name
-                entry['segments'] = []
-                for reservation in resource.Reservations:
-                    segment = dict()
-                    segment['end'] = self._convert_to_ISO8601(reservation.EndTime)
-                    segment['id'] = reservation.ReservationId
-                    segment['name'] = reservation.ReservationName
-                    segment['owner'] = reservation.Owner
-                    segment['start'] = self._convert_to_ISO8601(reservation.StartTime)
+            entry = dict()
+            entry['category'] = resource.Name
+            entry['family'] = resources[resource.FullName].ResourceFamilyName
+            entry['model'] = resources[resource.FullName].ResourceModelName
+            entry['segments'] = []
+            for reservation in resource.Reservations:
+                segment = dict()
+                segment['end'] = self._convert_to_ISO8601(reservation.EndTime)
+                segment['id'] = reservation.ReservationId
+                segment['name'] = reservation.ReservationName
+                segment['owner'] = reservation.Owner
+                segment['start'] = self._convert_to_ISO8601(reservation.StartTime)
 
-                    entry['segments'].append(segment)
+                entry['segments'].append(segment)
 
-                entry['segments'] = sorted(entry['segments'], key=lambda k: k['end'], reverse=True)
-                self.reservation_report.append(entry)
+            entry['segments'] = sorted(entry['segments'], key=lambda k: k['end'], reverse=True)
+            self.reservation_report.append(entry)
 
-    def generate_resource_list(self):
+    def get_resources(self):
         """
         Generates a complete list of resources based on the Family/Model lookup
         The search terms are entries in the 'fam_model_list' in the Configs
@@ -97,12 +98,14 @@ class ResourceAvailability(object):
         :return:
         """
 
-        self.resource_list = []
+        resource = {}
         for entry in self.param['family_model_list']:
             family, model = entry.split(':', 1)
             resources = self.cs_session.FindResources(resourceFamily=family, resourceModel=model).Resources
 
-            self.resource_list += [resource.Name for resource in resources]
+            resource.update({resource.Name: resource for resource in resources})
+
+        return resource
 
     def generate_start_end_time(self):
         """
@@ -129,9 +132,9 @@ class ResourceAvailability(object):
         :return: None
         """
         self.generate_start_end_time()
-        self.generate_resource_list()
+        resources = self.get_resources()
 
-        self.get_reservations(resource_list=self.resource_list, start_time=self.start_time, end_time=self.end_time)
+        self.get_reservations(resources=resources, start_time=self.start_time, end_time=self.end_time)
 
         with open(self.param['output_file'], 'w') as f:
             f.write(dumps(self.reservation_report, sort_keys=False, indent=4, separators=(',', ': ')))
